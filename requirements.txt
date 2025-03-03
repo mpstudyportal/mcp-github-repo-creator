@@ -1,0 +1,10 @@
+# MCP (Model Context Protocol) framework - Official SDK
+mcp[cli]>=1.0.0
+
+# Core dependencies for the GitHub repository creator
+argparse
+requests
+# Optional: Development dependencies
+# pytest>=7.0.0
+# pytest-asyncio>=0.21.0  
+# mypy>=1.0.0

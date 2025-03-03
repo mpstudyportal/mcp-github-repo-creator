@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.pyo
+*.pyd
+*.pdb
+*.log
+*.pot
+*.mo
+*.manifest
+*.spec
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test and coverage
+.coverage
+.tox/
+.nox/
+.pytest_cache/
+htmlcov/
+
+# MCP/SDK
+.mcp/
+
+# Local config
+*.local
+*.envrc
+
+# Misc
+*.bak
+*.swp
+*.swo
+*~
+
+# Ignore metadata and setup artifacts
+github_repo_metadata.json
+GITHUB_SETUP.md
