@@ -139,7 +139,9 @@ class GitHubRepoCreator:
             f'gh repo create {self.repo_name} --private --description "{escaped_description}"',
             "",
             "# Step 2: Add remote origin to local repository",
-            f"git remote add origin https://github.com/$(gh api user --jq .login)/{self.repo_name}.git",
+            f"# First get your GitHub username and add remote",
+            f"GITHUB_USER=$(gh api user --jq .login)",
+            f"git remote add origin https://github.com/$GITHUB_USER/{self.repo_name}.git",
             "",
             "# Step 3: Set main as default branch",
             "git branch -M main",
@@ -552,7 +554,13 @@ class GitHubRepoCreator:
 
     def create_repository(self) -> bool:
         """
-        Create the GitHub repository with all settings.
+        Create the GitHub repository with all settings, with resume capability.
+        
+        This method can detect where the process left off and continue from there:
+        - If repository exists on GitHub, skip creation
+        - If remote origin exists, skip adding it
+        - If code is already pushed, skip pushing
+        - Continue with remaining steps (topics, settings)
 
         Returns:
             bool: True if successful, False otherwise
@@ -563,72 +571,143 @@ class GitHubRepoCreator:
         topics = self.generate_repo_topics()
 
         print(f"🚀 Creating repository: {self.repo_name}")
-
+        
+        # Check current state and determine what steps to perform
+        repo_exists_on_github = self._check_repo_exists_on_github()
+        has_remote_origin = self._check_has_remote_origin()
+        code_is_pushed = self._check_code_is_pushed()
+        
         try:
-            # Step 1: Create the repository
-            escaped_description = description.replace('"', '\\"')
-            result = subprocess.run([
-                "gh", "repo", "create", self.repo_name,
-                "--private",
-                "--description", escaped_description
-            ], capture_output=True, text=True)
+            # Step 1: Create the repository (if not already exists)
+            if repo_exists_on_github:
+                print("ℹ️  Repository already exists on GitHub, skipping creation...")
+            else:
+                escaped_description = description.replace('"', '\\"')
+                result = subprocess.run([
+                    "gh", "repo", "create", self.repo_name,
+                    "--private",
+                    "--description", escaped_description
+                ], capture_output=True, text=True)
 
-            if result.returncode != 0:
-                print(f"❌ Failed to create repository: {result.stderr}")
-                return False
+                if result.returncode != 0:
+                    print(f"❌ Failed to create repository: {result.stderr}")
+                    return False
 
-            print("✅ Repository created successfully")
+                print("✅ Repository created successfully")
+                repo_exists_on_github = True
 
-            # Step 2: Add remote origin
-            print("🔗 Adding remote origin...")
-            result = subprocess.run([
-                "git", "remote", "add", "origin",
-                f"https://github.com/$(gh api user --jq .login)/{self.repo_name}.git"
-            ], capture_output=True, text=True, shell=True)
+            # Step 2: Add remote origin (if not already exists)
+            if has_remote_origin:
+                print("ℹ️  Remote origin already exists, skipping...")
+                # Verify the remote URL is correct
+                existing_url = self._get_current_remote_url()
+                print(f"🔍 Current remote URL: {existing_url}")
+            else:
+                print("🔗 Adding remote origin...")
+                
+                # First get the GitHub username
+                username_result = subprocess.run([
+                    "gh", "api", "user", "--jq", ".login"
+                ], capture_output=True, text=True)
+                
+                if username_result.returncode != 0:
+                    print(f"⚠️  Could not get GitHub username: {username_result.stderr}")
+                    print("🔄 Attempting to get username from repository info...")
+                    # Try alternative method to get the username
+                    repo_view_result = subprocess.run([
+                        "gh", "repo", "view", self.repo_name, "--json", "owner"
+                    ], capture_output=True, text=True)
+                    
+                    if repo_view_result.returncode == 0:
+                        repo_data = json.loads(repo_view_result.stdout)
+                        github_username = repo_data["owner"]["login"]
+                    else:
+                        print("❌ Could not determine GitHub username")
+                        return False
+                else:
+                    github_username = username_result.stdout.strip()
+                
+                # Construct the repository URL with the actual username
+                repo_url = f"https://github.com/{github_username}/{self.repo_name}.git"
+                
+                # Add the remote origin
+                result = subprocess.run([
+                    "git", "remote", "add", "origin", repo_url
+                ], capture_output=True, text=True)
 
-            if result.returncode != 0:
-                print(f"⚠️  Could not add remote origin: {result.stderr}")
+                if result.returncode != 0:
+                    print(f"⚠️  Could not add remote origin: {result.stderr}")
+                    print(f"🔍 Attempted URL: {repo_url}")
+                    # Don't return False here, try to continue with other steps
+                else:
+                    print(f"✅ Remote origin added: {repo_url}")
+                    has_remote_origin = True
 
             # Step 3: Set main as default branch
             print("🌿 Setting main as default branch...")
             subprocess.run(["git", "branch", "-M", "main"],
                            capture_output=True, text=True)
 
-            # Step 4: Push to GitHub
-            print("📤 Pushing to GitHub...")
-            result = subprocess.run([
-                "git", "push", "-u", "origin", "main"
-            ], capture_output=True, text=True)
+            # Step 4: Push to GitHub (if not already pushed)
+            if code_is_pushed:
+                print("ℹ️  Code already pushed to GitHub, skipping...")
+            else:
+                print("📤 Pushing to GitHub...")
+                result = subprocess.run([
+                    "git", "push", "-u", "origin", "main"
+                ], capture_output=True, text=True)
 
-            if result.returncode != 0:
-                print(f"❌ Failed to push to GitHub: {result.stderr}")
-                return False
+                if result.returncode != 0:
+                    print(f"❌ Failed to push to GitHub: {result.stderr}")
+                    print("🔍 Checking if remote origin is properly configured...")
+                    
+                    # Try to diagnose the issue
+                    remote_check = subprocess.run([
+                        "git", "remote", "-v"
+                    ], capture_output=True, text=True)
+                    
+                    if remote_check.returncode == 0:
+                        print(f"📋 Current remotes:\n{remote_check.stdout}")
+                    
+                    # If we have a remote but can't push, might be authentication issue
+                    if has_remote_origin:
+                        print("💡 Possible solutions:")
+                        print("   1. Check GitHub CLI authentication: gh auth status")
+                        print("   2. Verify repository permissions")
+                        print("   3. Try: gh auth refresh")
+                    
+                    return False
 
-            print("✅ Code pushed successfully")
+                print("✅ Code pushed successfully")
+                code_is_pushed = True
 
-            # Step 5: Add topics
+            # Step 5: Add topics (always attempt, as topics might have changed)
             if topics:
                 print("🏷️  Adding repository topics...")
-                # For new repositories, don't check existing topics (there won't be any)
+                # For resume scenarios, check existing topics to avoid duplicates
                 valid_topics = self.validate_topics(topics)
                 if valid_topics:
-                    if not self.add_topics_to_repository(valid_topics, check_existing=False):
-                        print("⚠️  Repository created but topics failed to add")
+                    # Use existing topic checking since repository already exists
+                    if not self.add_topics_to_repository(valid_topics, check_existing=True):
+                        print("⚠️  Repository setup complete but topics failed to add")
                 else:
                     print("⚠️  No valid topics to add")
             else:
                 print("ℹ️  No topics specified in metadata")
 
-            # Step 6: Set repository settings
+            # Step 6: Set repository settings (always attempt)
             print("⚙️  Configuring repository settings...")
-            subprocess.run([
+            settings_result = subprocess.run([
                 "gh", "repo", "edit", self.repo_name,
                 "--enable-issues",
                 "--enable-wiki",
                 "--enable-projects"
             ], capture_output=True, text=True)
-
-            print("✅ Repository settings configured")
+            
+            if settings_result.returncode != 0:
+                print(f"⚠️  Could not configure some repository settings: {settings_result.stderr}")
+            else:
+                print("✅ Repository settings configured")
 
             # Step 7: Show repository URL
             result = subprocess.run([
@@ -640,10 +719,94 @@ class GitHubRepoCreator:
                 repo_url = repo_data.get("url", "")
                 print(f"🌐 Repository URL: {repo_url}")
 
+            print("\n🎉 Repository setup completed successfully!")
             return True
 
         except Exception as e:
-            print(f"❌ Error creating repository: {e}")
+            print(f"❌ Error during repository setup: {e}")
+            return False
+
+    def _check_repo_exists_on_github(self) -> bool:
+        """
+        Check if the repository already exists on GitHub.
+        
+        Returns:
+            bool: True if repository exists on GitHub
+        """
+        try:
+            result = subprocess.run([
+                "gh", "repo", "view", self.repo_name
+            ], capture_output=True, text=True)
+            
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    def _check_has_remote_origin(self) -> bool:
+        """
+        Check if the local repository has a remote origin configured.
+        
+        Returns:
+            bool: True if remote origin exists
+        """
+        try:
+            result = subprocess.run([
+                "git", "remote", "get-url", "origin"
+            ], capture_output=True, text=True)
+            
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    def _get_current_remote_url(self) -> str:
+        """
+        Get the current remote origin URL.
+        
+        Returns:
+            str: Current remote URL or empty string if not found
+        """
+        try:
+            result = subprocess.run([
+                "git", "remote", "get-url", "origin"
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                return result.stdout.strip()
+            return ""
+        except Exception:
+            return ""
+
+    def _check_code_is_pushed(self) -> bool:
+        """
+        Check if the local code has been pushed to the remote repository.
+        
+        Returns:
+            bool: True if code appears to be pushed to remote
+        """
+        try:
+            # Check if we can fetch from origin (indicates remote exists and is accessible)
+            fetch_result = subprocess.run([
+                "git", "fetch", "origin", "main"
+            ], capture_output=True, text=True)
+            
+            if fetch_result.returncode != 0:
+                return False
+            
+            # Check if local main is up to date with origin/main
+            status_result = subprocess.run([
+                "git", "status", "-b", "--porcelain"
+            ], capture_output=True, text=True)
+            
+            if status_result.returncode == 0:
+                # Look for indicators that we're behind or ahead
+                status_output = status_result.stdout
+                # If we see "ahead" or "behind" it means we have a tracking relationship
+                # If there's no such indication and fetch worked, code is likely pushed
+                if "ahead" not in status_output and "behind" not in status_output:
+                    return True
+                    
+            return False
+        except Exception:
             return False
 
     def run(self) -> bool:
