@@ -150,7 +150,9 @@ class GitHubRepoCreator:
             "git push -u origin main",
             "",
             "# Step 5: Set repository settings (optional)",
-            f'gh repo edit {self.repo_name} --enable-issues --enable-wiki --enable-projects',
+            f"# Get the full repository path for settings",
+            f"REPO_OWNER=$(gh api user --jq .login)",
+            f'gh repo edit $REPO_OWNER/{self.repo_name} --enable-issues --enable-wiki --enable-projects',
             "",
             "# Step 6: View the created repository",
             f"gh repo view {self.repo_name} --web"
@@ -417,9 +419,28 @@ class GitHubRepoCreator:
         try:
             # GitHub CLI command to add topics
             topics_string = ",".join(topics_to_add)
-            result = subprocess.run([
-                "gh", "repo", "edit", "--add-topic", topics_string
+            
+            # Try to get the full repository path for the command
+            # First, try to get current repository info to determine the proper format
+            repo_view_result = subprocess.run([
+                "gh", "repo", "view", "--json", "owner,name"
             ], capture_output=True, text=True)
+            
+            if repo_view_result.returncode == 0:
+                repo_data = json.loads(repo_view_result.stdout)
+                owner = repo_data["owner"]["login"]
+                repo_name = repo_data["name"]
+                full_repo_path = f"{owner}/{repo_name}"
+                
+                # Use the full repository path
+                result = subprocess.run([
+                    "gh", "repo", "edit", full_repo_path, "--add-topic", topics_string
+                ], capture_output=True, text=True)
+            else:
+                # Fallback to repository name only (might work in some contexts)
+                result = subprocess.run([
+                    "gh", "repo", "edit", "--add-topic", topics_string
+                ], capture_output=True, text=True)
 
             if result.returncode != 0:
                 print(f"❌ Failed to add topics: {result.stderr}")
@@ -483,10 +504,28 @@ class GitHubRepoCreator:
                 return set()
 
             repo_data = json.loads(result.stdout)
-            current_topics = {
-                topic["topic"]["name"]
-                for topic in repo_data.get("repositoryTopics", [])
-            }
+            repository_topics = repo_data.get("repositoryTopics", [])
+            
+            # Handle the case where repositoryTopics might be None
+            if repository_topics is None:
+                return set()
+            
+            current_topics = set()
+            for topic_item in repository_topics:
+                # Handle different possible structures in the API response
+                if isinstance(topic_item, dict):
+                    if "topic" in topic_item and isinstance(topic_item["topic"], dict):
+                        # Structure: {"topic": {"name": "topic-name"}}
+                        topic_name = topic_item["topic"].get("name")
+                    elif "name" in topic_item:
+                        # Structure: {"name": "topic-name"}
+                        topic_name = topic_item.get("name")
+                    else:
+                        # Skip malformed entries
+                        continue
+                        
+                    if topic_name:
+                        current_topics.add(topic_name)
 
             return current_topics
 
@@ -697,17 +736,43 @@ class GitHubRepoCreator:
 
             # Step 6: Set repository settings (always attempt)
             print("⚙️  Configuring repository settings...")
-            settings_result = subprocess.run([
-                "gh", "repo", "edit", self.repo_name,
-                "--enable-issues",
-                "--enable-wiki",
-                "--enable-projects"
+            
+            # Get the repository owner/name for the edit command
+            repo_info_result = subprocess.run([
+                "gh", "repo", "view", self.repo_name, "--json", "owner,name"
             ], capture_output=True, text=True)
             
-            if settings_result.returncode != 0:
-                print(f"⚠️  Could not configure some repository settings: {settings_result.stderr}")
+            if repo_info_result.returncode == 0:
+                repo_info_data = json.loads(repo_info_result.stdout)
+                owner = repo_info_data["owner"]["login"]
+                repo_name = repo_info_data["name"]
+                full_repo_path = f"{owner}/{repo_name}"
+                
+                settings_result = subprocess.run([
+                    "gh", "repo", "edit", full_repo_path,
+                    "--enable-issues",
+                    "--enable-wiki",
+                    "--enable-projects"
+                ], capture_output=True, text=True)
+                
+                if settings_result.returncode != 0:
+                    print(f"⚠️  Could not configure some repository settings: {settings_result.stderr}")
+                else:
+                    print("✅ Repository settings configured")
             else:
-                print("✅ Repository settings configured")
+                print("⚠️  Could not get repository info for settings configuration")
+                # Fallback: try with just the repo name (might work in some contexts)
+                settings_result = subprocess.run([
+                    "gh", "repo", "edit", self.repo_name,
+                    "--enable-issues",
+                    "--enable-wiki",
+                    "--enable-projects"
+                ], capture_output=True, text=True)
+                
+                if settings_result.returncode != 0:
+                    print(f"⚠️  Fallback repository settings also failed: {settings_result.stderr}")
+                else:
+                    print("✅ Repository settings configured (fallback)")
 
             # Step 7: Show repository URL
             result = subprocess.run([
