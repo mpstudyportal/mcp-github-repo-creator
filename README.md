@@ -4,7 +4,7 @@ A **Model Context Protocol (MCP)** server that provides tools for AI application
 
 ## 🚀 Features
 
-- **Repository Analysis**: Automatically analyze local git repositories to extract metadata
+- **Repository Analysis**: Automatically analyze local git repositories to extract metadata. Includes traditional and AI approaches to analyze the repository
 - **GitHub Integration**: Create private GitHub repositories with proper configuration
 - **Topic Management**: Automatically add relevant topics based on project analysis
 - **MCP Compatible**: Works with any MCP-compatible AI client (Copilot, Claude, etc.)
@@ -15,7 +15,7 @@ A **Model Context Protocol (MCP)** server that provides tools for AI application
 1. Clone this repository:
 
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/flickleafy/mcp-github-repo-creator.git
    cd mcp-github-repo-creator
    ```
 
@@ -234,7 +234,7 @@ generate appropriate metadata, and set up the repository on GitHub."
 3. **Clone and setup this MCP server**:
 
    ```bash
-   git clone https://github.com/your-username/mcp-github-repo-creator.git
+   git clone https://github.com/flickleafy/mcp-github-repo-creator.git
    cd mcp-github-repo-creator
    bash setup.sh
    ```
@@ -288,7 +288,7 @@ Create an easy installation script by running:
 
 ```bash
 # Download and run the auto-installer
-curl -sSL https://raw.githubusercontent.com/your-username/mcp-github-repo-creator/main/install-copilot.sh | bash
+curl -sSL https://raw.githubusercontent.com/flickleafy/mcp-github-repo-creator/main/install-copilot.sh | bash
 ```
 
 Or manually create the installer script in your project:
@@ -320,7 +320,7 @@ fi
 INSTALL_DIR="$HOME/.mcp-servers/github-repo-creator"
 echo "📁 Installing to $INSTALL_DIR..."
 mkdir -p "$HOME/.mcp-servers"
-git clone https://github.com/your-username/mcp-github-repo-creator.git "$INSTALL_DIR"
+git clone https://github.com/flickleafy/mcp-github-repo-creator.git "$INSTALL_DIR"
 
 # Setup virtual environment
 cd "$INSTALL_DIR"
