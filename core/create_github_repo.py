@@ -45,19 +45,30 @@ class GitHubRepoCreator:
     topics management functionality directly without external dependencies.
     """
 
-    def __init__(self, metadata_file: str = None):
+    def __init__(self, metadata_file: str = None, project_dir: str = None):
         """
         Initialize the GitHub repository creator.
 
         Args:
             metadata_file: Path to the metadata JSON file
+            project_dir: Path to the project directory (default: current working directory)
         """
-        self.current_dir = Path.cwd()
-        self.metadata_file = Path(
-            metadata_file) if metadata_file else self.current_dir / "github_repo_metadata.json"
+        self.project_dir = Path(project_dir).resolve() if project_dir else Path.cwd()
+        self.current_dir = self.project_dir  # For backward compatibility
+        
+        if metadata_file:
+            # If metadata_file is absolute, use as-is; otherwise, resolve relative to project_dir
+            metadata_path = Path(metadata_file)
+            if metadata_path.is_absolute():
+                self.metadata_file = metadata_path
+            else:
+                self.metadata_file = self.project_dir / metadata_path
+        else:
+            self.metadata_file = self.project_dir / "github_repo_metadata.json"
+            
         self.metadata = self._load_metadata()
         self.repo_name = self.metadata.get("repository_name", "")
-        self.readme_path = self.current_dir / "README.md"
+        self.readme_path = self.project_dir / "README.md"
 
     def _load_metadata(self) -> Dict[str, Any]:
         """
@@ -237,12 +248,12 @@ class GitHubRepoCreator:
         issues = []
 
         # Check if we're in a git repository
-        if not (self.current_dir / ".git").exists():
-            issues.append("❌ Not in a git repository")
+        if not (self.project_dir / ".git").exists():
+            issues.append(f"❌ Not in a git repository: {self.project_dir}")
 
         # Check if README.md exists
         if not self.readme_path.exists():
-            issues.append("❌ README.md not found")
+            issues.append(f"❌ README.md not found in: {self.project_dir}")
 
         # Check if remote origin already exists
         try:
@@ -251,7 +262,7 @@ class GitHubRepoCreator:
                 ["git", "remote", "get-url", "origin"],
                 capture_output=True,
                 text=True,
-                cwd=self.current_dir
+                cwd=self.project_dir
             )
             if result.returncode == 0:
                 issues.append(
@@ -265,7 +276,7 @@ class GitHubRepoCreator:
                 ["git", "status", "--porcelain"],
                 capture_output=True,
                 text=True,
-                cwd=self.current_dir
+                cwd=self.project_dir
             )
             if result.stdout.strip():
                 issues.append("⚠️  Working directory has uncommitted changes")
@@ -424,7 +435,7 @@ class GitHubRepoCreator:
             # First, try to get current repository info to determine the proper format
             repo_view_result = subprocess.run([
                 "gh", "repo", "view", "--json", "owner,name"
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, cwd=self.project_dir)
             
             if repo_view_result.returncode == 0:
                 repo_data = json.loads(repo_view_result.stdout)
@@ -435,12 +446,12 @@ class GitHubRepoCreator:
                 # Use the full repository path
                 result = subprocess.run([
                     "gh", "repo", "edit", full_repo_path, "--add-topic", topics_string
-                ], capture_output=True, text=True)
+                ], capture_output=True, text=True, cwd=self.project_dir)
             else:
                 # Fallback to repository name only (might work in some contexts)
                 result = subprocess.run([
                     "gh", "repo", "edit", "--add-topic", topics_string
-                ], capture_output=True, text=True)
+                ], capture_output=True, text=True, cwd=self.project_dir)
 
             if result.returncode != 0:
                 print(f"❌ Failed to add topics: {result.stderr}")
@@ -471,7 +482,7 @@ class GitHubRepoCreator:
             # Get repository information
             result = subprocess.run([
                 "gh", "repo", "view", "--json", "owner,name,isPrivate,url"
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, cwd=self.project_dir)
 
             if result.returncode != 0:
                 print(
@@ -497,7 +508,7 @@ class GitHubRepoCreator:
         try:
             result = subprocess.run([
                 "gh", "repo", "view", "--json", "repositoryTopics"
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, cwd=self.project_dir)
 
             if result.returncode != 0:
                 print("⚠️  Could not get current topics")
@@ -626,7 +637,7 @@ class GitHubRepoCreator:
                     "gh", "repo", "create", self.repo_name,
                     "--private",
                     "--description", escaped_description
-                ], capture_output=True, text=True)
+                ], capture_output=True, text=True, cwd=self.project_dir)
 
                 if result.returncode != 0:
                     print(f"❌ Failed to create repository: {result.stderr}")
@@ -647,7 +658,7 @@ class GitHubRepoCreator:
                 # First get the GitHub username
                 username_result = subprocess.run([
                     "gh", "api", "user", "--jq", ".login"
-                ], capture_output=True, text=True)
+                ], capture_output=True, text=True, cwd=self.project_dir)
                 
                 if username_result.returncode != 0:
                     print(f"⚠️  Could not get GitHub username: {username_result.stderr}")
@@ -655,7 +666,7 @@ class GitHubRepoCreator:
                     # Try alternative method to get the username
                     repo_view_result = subprocess.run([
                         "gh", "repo", "view", self.repo_name, "--json", "owner"
-                    ], capture_output=True, text=True)
+                    ], capture_output=True, text=True, cwd=self.project_dir)
                     
                     if repo_view_result.returncode == 0:
                         repo_data = json.loads(repo_view_result.stdout)
@@ -672,7 +683,7 @@ class GitHubRepoCreator:
                 # Add the remote origin
                 result = subprocess.run([
                     "git", "remote", "add", "origin", repo_url
-                ], capture_output=True, text=True)
+                ], capture_output=True, text=True, cwd=self.project_dir)
 
                 if result.returncode != 0:
                     print(f"⚠️  Could not add remote origin: {result.stderr}")
@@ -685,7 +696,7 @@ class GitHubRepoCreator:
             # Step 3: Set main as default branch
             print("🌿 Setting main as default branch...")
             subprocess.run(["git", "branch", "-M", "main"],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, cwd=self.project_dir)
 
             # Step 4: Push to GitHub (if not already pushed)
             if code_is_pushed:
@@ -694,7 +705,7 @@ class GitHubRepoCreator:
                 print("📤 Pushing to GitHub...")
                 result = subprocess.run([
                     "git", "push", "-u", "origin", "main"
-                ], capture_output=True, text=True)
+                ], capture_output=True, text=True, cwd=self.project_dir)
 
                 if result.returncode != 0:
                     print(f"❌ Failed to push to GitHub: {result.stderr}")
@@ -703,7 +714,7 @@ class GitHubRepoCreator:
                     # Try to diagnose the issue
                     remote_check = subprocess.run([
                         "git", "remote", "-v"
-                    ], capture_output=True, text=True)
+                    ], capture_output=True, text=True, cwd=self.project_dir)
                     
                     if remote_check.returncode == 0:
                         print(f"📋 Current remotes:\n{remote_check.stdout}")
@@ -740,7 +751,7 @@ class GitHubRepoCreator:
             # Get the repository owner/name for the edit command
             repo_info_result = subprocess.run([
                 "gh", "repo", "view", self.repo_name, "--json", "owner,name"
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, cwd=self.project_dir)
             
             if repo_info_result.returncode == 0:
                 repo_info_data = json.loads(repo_info_result.stdout)
@@ -753,7 +764,7 @@ class GitHubRepoCreator:
                     "--enable-issues",
                     "--enable-wiki",
                     "--enable-projects"
-                ], capture_output=True, text=True)
+                ], capture_output=True, text=True, cwd=self.project_dir)
                 
                 if settings_result.returncode != 0:
                     print(f"⚠️  Could not configure some repository settings: {settings_result.stderr}")
@@ -767,7 +778,7 @@ class GitHubRepoCreator:
                     "--enable-issues",
                     "--enable-wiki",
                     "--enable-projects"
-                ], capture_output=True, text=True)
+                ], capture_output=True, text=True, cwd=self.project_dir)
                 
                 if settings_result.returncode != 0:
                     print(f"⚠️  Fallback repository settings also failed: {settings_result.stderr}")
@@ -777,7 +788,7 @@ class GitHubRepoCreator:
             # Step 7: Show repository URL
             result = subprocess.run([
                 "gh", "repo", "view", self.repo_name, "--json", "url"
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, cwd=self.project_dir)
 
             if result.returncode == 0:
                 repo_data = json.loads(result.stdout)
@@ -801,7 +812,7 @@ class GitHubRepoCreator:
         try:
             result = subprocess.run([
                 "gh", "repo", "view", self.repo_name
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, cwd=self.project_dir)
             
             return result.returncode == 0
         except Exception:
@@ -817,7 +828,7 @@ class GitHubRepoCreator:
         try:
             result = subprocess.run([
                 "git", "remote", "get-url", "origin"
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, cwd=self.project_dir)
             
             return result.returncode == 0
         except Exception:
@@ -833,7 +844,7 @@ class GitHubRepoCreator:
         try:
             result = subprocess.run([
                 "git", "remote", "get-url", "origin"
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, cwd=self.project_dir)
             
             if result.returncode == 0:
                 return result.stdout.strip()
@@ -852,7 +863,7 @@ class GitHubRepoCreator:
             # Check if we can fetch from origin (indicates remote exists and is accessible)
             fetch_result = subprocess.run([
                 "git", "fetch", "origin", "main"
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, cwd=self.project_dir)
             
             if fetch_result.returncode != 0:
                 return False
@@ -860,7 +871,7 @@ class GitHubRepoCreator:
             # Check if local main is up to date with origin/main
             status_result = subprocess.run([
                 "git", "status", "-b", "--porcelain"
-            ], capture_output=True, text=True)
+            ], capture_output=True, text=True, cwd=self.project_dir)
             
             if status_result.returncode == 0:
                 # Look for indicators that we're behind or ahead
@@ -976,7 +987,7 @@ class GitHubRepoCreator:
         print("-" * 40)
 
         manual_instructions = self.generate_manual_setup_instructions()
-        manual_file = self.current_dir / "GITHUB_SETUP.md"
+        manual_file = self.project_dir / "GITHUB_SETUP.md"
 
         with open(manual_file, 'w', encoding='utf-8') as f:
             f.write('\n'.join(manual_instructions))
@@ -998,20 +1009,21 @@ class GitHubRepoCreator:
         return True
 
     @classmethod
-    def add_topics_from_metadata(cls, metadata_file: str = None, repo_name: str = None) -> bool:
+    def add_topics_from_metadata(cls, metadata_file: str = None, repo_name: str = None, project_dir: str = None) -> bool:
         """
         Class method to add topics from metadata file without user interaction.
 
         Args:
             metadata_file: Path to the metadata JSON file
             repo_name: Repository name (optional, will be read from metadata)
+            project_dir: Path to the project directory (optional, defaults to current directory)
 
         Returns:
             bool: True if successful, False otherwise
 
         Time Complexity: O(n) where n = number of topics
         """
-        creator = cls(metadata_file=metadata_file)
+        creator = cls(metadata_file=metadata_file, project_dir=project_dir)
 
         # Override repo name if provided
         if repo_name:
@@ -1122,6 +1134,9 @@ Examples:
   # Use custom metadata file
   python create_github_repo.py --metadata my_project.json --create
 
+  # Work on a different project directory
+  python create_github_repo.py --project-dir /path/to/project --create
+
   # Add topics programmatically (for automation)
   python create_github_repo.py --add-topics-only
         """
@@ -1130,6 +1145,11 @@ Examples:
         "--metadata",
         type=str,
         help="Path to metadata JSON file (default: github_repo_metadata.json)"
+    )
+    parser.add_argument(
+        "--project-dir",
+        type=str,
+        help="Path to the project directory (default: current working directory)"
     )
     parser.add_argument(
         "--create",
@@ -1150,7 +1170,7 @@ Examples:
     args = parser.parse_args()
 
     try:
-        creator = GitHubRepoCreator(metadata_file=args.metadata)
+        creator = GitHubRepoCreator(metadata_file=args.metadata, project_dir=args.project_dir)
 
         # Handle different modes
         if args.create:
@@ -1162,7 +1182,7 @@ Examples:
         elif args.add_topics_only:
             print("📝 Adding topics from metadata (automation mode)...")
             success = GitHubRepoCreator.add_topics_from_metadata(
-                metadata_file=args.metadata)
+                metadata_file=args.metadata, project_dir=args.project_dir)
         else:
             # Interactive mode
             success = creator.run()
