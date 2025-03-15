@@ -45,6 +45,7 @@ from core.templates import (
     get_full_setup_success_message,
     get_example_metadata_structure
 )
+from core.create_github_repo import GitHubRepoCreator
 
 # Initialize the FastMCP server
 app = FastMCP("github-repo-creator")
@@ -115,84 +116,38 @@ def create_github_repo_from_metadata(
             with open(metadata_file, 'w', encoding='utf-8') as f:
                 json.dump(metadata, f, indent=2, ensure_ascii=False)
 
+        # Use the enhanced GitHubRepoCreator class
+        creator = GitHubRepoCreator(
+            metadata_file=str(metadata_file) if save_metadata_file else None,
+            project_dir=str(repo_path_obj)
+        )
+
+        # If we didn't save the metadata file, set it directly
+        if not save_metadata_file:
+            creator.metadata = metadata
+            creator.repo_name = metadata.get("repository_name", "")
+
+        # Check prerequisites
+        success, issues = creator.check_prerequisites()
+        if issues:
+            warnings = "\n".join([f"   {issue}" for issue in issues])
+            return f"⚠️  Prerequisites check found issues:\n{warnings}\n\nProceeding anyway..."
+
         # Check GitHub CLI authentication
-        try:
-            result = subprocess.run(
-                ["gh", "auth", "status"],
-                capture_output=True,
-                text=True
-            )
-            if result.returncode != 0:
-                return "❌ GitHub CLI not available or not authenticated. Please run: gh auth login"
-        except FileNotFoundError:
-            return "❌ GitHub CLI not installed. Please install it from: https://cli.github.com/"
+        if not creator.check_github_cli_auth():
+            return "❌ GitHub CLI not available or not authenticated. Please run: gh auth login"
 
-        # Change to the repository directory
-        original_cwd = os.getcwd()
-        os.chdir(repo_path_obj)
-
-        try:
-            # Step 1: Create the repository
-            repo_name = metadata['repository_name']
-            description = metadata['description']
-            escaped_description = description.replace('"', '\\"')
-            
-            result = subprocess.run([
-                "gh", "repo", "create", repo_name,
-                "--private",
-                "--description", escaped_description
-            ], capture_output=True, text=True)
-
-            if result.returncode != 0:
-                return f"❌ Failed to create repository: {result.stderr}"
-
-            # Step 2: Add remote origin
-            result = subprocess.run([
-                "git", "remote", "add", "origin",
-                f"https://github.com/$(gh api user --jq .login)/{repo_name}.git"
-            ], capture_output=True, text=True, shell=True)
-
-            # Step 3: Set main as default branch
-            subprocess.run(["git", "branch", "-M", "main"], capture_output=True, text=True)
-
-            # Step 4: Push to GitHub
-            result = subprocess.run([
-                "git", "push", "-u", "origin", "main"
-            ], capture_output=True, text=True)
-
-            if result.returncode != 0:
-                return f"❌ Failed to push to GitHub: {result.stderr}"
-
-            # Step 5: Add topics
-            topics = metadata.get('topics', [])
-            if topics:
-                valid_topics = [t.lower().strip() for t in topics if t and len(t.strip()) > 1]
-                if valid_topics:
-                    topics_string = ",".join(valid_topics[:20])  # GitHub limit
-                    subprocess.run([
-                        "gh", "repo", "edit", "--add-topic", topics_string
-                    ], capture_output=True, text=True)
-
-            # Step 6: Set repository settings
-            subprocess.run([
-                "gh", "repo", "edit", repo_name,
-                "--enable-issues",
-                "--enable-wiki",
-                "--enable-projects"
-            ], capture_output=True, text=True)
-
-            # Get success message using template function
+        # Create the repository using the enhanced method
+        if creator.create_repository():
             topics = metadata.get('topics', [])
             return get_repository_creation_success_message(
-                repo_name=repo_name,
-                description=description,
+                repo_name=metadata['repository_name'],
+                description=metadata['description'],
                 topics=topics,
                 metadata=metadata
             )
-
-        finally:
-            # Restore original working directory
-            os.chdir(original_cwd)
+        else:
+            return "❌ Failed to create GitHub repository. Check the output above for details."
 
     except Exception as e:
         return f"❌ Error creating GitHub repository: {str(e)}"
@@ -254,24 +209,83 @@ def create_github_repository(metadata_file: str = "github_repo_metadata.json", r
     """
     try:
         repo_path_obj = Path(repo_path).resolve()
-        metadata_file_path = repo_path_obj / metadata_file
-
-        if not metadata_file_path.exists():
-            return f"❌ Error: Metadata file not found: {metadata_file_path}"
-
-        # Load metadata
-        with open(metadata_file_path, 'r', encoding='utf-8') as f:
-            metadata = json.load(f)
-
-        # Use the create_github_repo_from_metadata function
-        return create_github_repo_from_metadata(
-            metadata_json=json.dumps(metadata),
-            repo_path=repo_path,
-            save_metadata_file=False  # File already exists
+        
+        # Use the enhanced GitHubRepoCreator class
+        creator = GitHubRepoCreator(
+            metadata_file=metadata_file,
+            project_dir=str(repo_path_obj)
         )
+
+        # Validate metadata
+        metadata_valid, metadata_issues = creator.validate_metadata()
+        if not metadata_valid:
+            issues_text = "\n".join([f"   {issue}" for issue in metadata_issues])
+            return f"❌ Metadata validation failed:\n{issues_text}"
+
+        # Check prerequisites  
+        success, issues = creator.check_prerequisites()
+        if issues:
+            warnings = "\n".join([f"   {issue}" for issue in issues])
+            return f"⚠️  Prerequisites check found issues:\n{warnings}\n\nProceeding anyway..."
+
+        # Check GitHub CLI authentication
+        if not creator.check_github_cli_auth():
+            return "❌ GitHub CLI not available or not authenticated. Please run: gh auth login"
+
+        # Create the repository using the enhanced method
+        if creator.create_repository():
+            metadata = creator.metadata
+            topics = metadata.get('topics', [])
+            return get_repository_creation_success_message(
+                repo_name=metadata['repository_name'],
+                description=metadata['description'],
+                topics=topics,
+                metadata=metadata
+            )
+        else:
+            return "❌ Failed to create GitHub repository. Check the output above for details."
 
     except Exception as e:
         return f"❌ Error creating GitHub repository: {str(e)}"
+
+
+@app.tool()
+def manage_repository_topics(repo_path: str = ".", metadata_file: str = "github_repo_metadata.json") -> str:
+    """
+    Manage topics for an existing GitHub repository using metadata file.
+    
+    Args:
+        repo_path: Path to the repository
+        metadata_file: Path to the metadata JSON file
+    
+    Returns:
+        Result message indicating success or failure
+    """
+    try:
+        # Use the enhanced GitHubRepoCreator class for topic management
+        creator = GitHubRepoCreator(
+            metadata_file=metadata_file,
+            project_dir=repo_path
+        )
+
+        # Validate metadata
+        metadata_valid, metadata_issues = creator.validate_metadata()
+        if not metadata_valid:
+            issues_text = "\n".join([f"   {issue}" for issue in metadata_issues])
+            return f"❌ Metadata validation failed:\n{issues_text}"
+
+        # Check GitHub CLI authentication
+        if not creator.check_github_cli_auth():
+            return "❌ GitHub CLI not available or not authenticated. Please run: gh auth login"
+
+        # Use the enhanced topic management
+        if creator.manage_existing_repository_topics():
+            return "✅ Repository topics updated successfully!"
+        else:
+            return "❌ Failed to update repository topics. Check the output above for details."
+
+    except Exception as e:
+        return f"❌ Error managing repository topics: {str(e)}"
 
 
 @app.tool()
@@ -287,37 +301,47 @@ def full_repository_setup(repo_path: str = ".", repository_name: str = None) -> 
         Complete setup result message
     """
     try:
-        # Step 1: Analyze repository
+        # Step 1: Analyze repository and generate metadata
         analyzer = RepositoryAnalyzer(repo_path)
 
         if not analyzer.is_git_repository():
             return "❌ Error: Not a git repository. Please run this from within a git repository."
 
-        # Step 2: Generate metadata
+        # Generate metadata
         metadata = analyzer.generate_metadata()
 
         # Override repository name if provided
         if repository_name:
             metadata["repository_name"] = repository_name
 
-        # Step 3: Save metadata file
+        # Step 2: Save metadata file
         repo_path_obj = Path(repo_path).resolve()
         metadata_path = repo_path_obj / "github_repo_metadata.json"
         
         with open(metadata_path, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=2, ensure_ascii=False)
 
-        # Step 4: Create GitHub repository
-        result = create_github_repo_from_metadata(
-            metadata_json=json.dumps(metadata),
-            repo_path=repo_path,
-            save_metadata_file=False  # Already saved
+        # Step 3: Create GitHub repository using enhanced GitHubRepoCreator
+        creator = GitHubRepoCreator(
+            metadata_file=str(metadata_path),
+            project_dir=str(repo_path_obj)
         )
 
-        if "🎉" in result:  # Success indicator
+        # Check prerequisites
+        success, issues = creator.check_prerequisites()
+        if issues:
+            warnings = "\n".join([f"   {issue}" for issue in issues])
+            return f"⚠️  Prerequisites check found issues:\n{warnings}\n\nCannot proceed with full setup."
+
+        # Check GitHub CLI authentication
+        if not creator.check_github_cli_auth():
+            return "❌ GitHub CLI not available or not authenticated. Please run: gh auth login"
+
+        # Create the repository
+        if creator.create_repository():
             return get_full_setup_success_message(metadata)
         else:
-            return f"❌ Repository analysis succeeded, but GitHub repository creation failed:\n{result}"
+            return f"❌ Repository analysis and metadata generation succeeded, but GitHub repository creation failed."
 
     except Exception as e:
         return f"❌ Error in full repository setup: {str(e)}"
